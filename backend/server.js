@@ -1,69 +1,93 @@
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import Book from './models/bookModel.js';
 
-/** Reference code: https://github.com/bpeddapudi/nodejs-basics-routes/blob/master/server.js 
- * import express */
-const express = require('express');
-const cors = require('cors');
+dotenv.config();
+const DB_URI = process.env.MONGO_URI;
+
 const app = express();
-// middleware
 app.use(express.json());
-app.use(cors())
-
-let myMockDB = [
-    {
-        id: 1,
-        title: 'Rich Dad Poor Dad',
-        author: 'Robert Kiyosaki',
-        description: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsa, voluptatibus corporis! Deserunt doloribus unde magnam, iusto officia cum commodi praesentium?',
-        img: 'https://m.media-amazon.com/images/I/51AHZGhzZEL.jpg',
-        status: 'todo'
-    },
-    {
-        id: 2,
-        title: 'Rework',
-        author: 'Jason Fried',
-        description: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsa, voluptatibus corporis! Deserunt doloribus unde magnam, iusto officia cum commodi praesentium?',
-        img: 'https://m.media-amazon.com/images/P/0307463745.01._SCLZZZZZZZ_SX500_.jpg',
-        status: 'inprogress'
-    },
-    {
-        id: 2,
-        title: 'When Breath Becomes Air',
-        author: 'Paul Kalanithi',
-        description: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsa, voluptatibus corporis! Deserunt doloribus unde magnam, iusto officia cum commodi praesentium?',
-        img: 'https://images-na.ssl-images-amazon.com/images/I/71dxZ1Z10xL.jpg',
-        status: 'inprogress'
-    }
-]
+app.use(cors());
 
 app.get('/', (req, res) => {
-    res.send('Your are lucky!! server is running...');
+  res.send('Your are lucky!! server is running...');
 });
 
-
-
-/** GET API: GETs Books from DB and returns as response */
-app.get('/books', (req, res) => {
-    res.json(myMockDB);
+app.get('/books', async (req, res, next) => {
+  try {
+    const books = await Book.find();
+    res.status(200).json({
+      status: 'success',
+      data: books,
+    });
+  } catch (err) {
+    console.log(err);
+    next();
+  }
 });
 
-/** POST API: Gets new book info from React and adds it to DB */
+app.post('/books', async (req, res, next) => {
+  const { title, author, description, img, status } = req.body;
+  const book = {
+    title,
+    author,
+    description,
+    img,
+    status,
+  };
+  try {
+    const addedBook = await Book.create(req.body);
+    res.status(201).json({
+      status: 'success',
+      message: 'Book added!',
+      data: book,
+    });
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+  }
+});
 
-app.post('/books', (req, res) => {
-    const inputBook = req.body;
-    const matchingBooks = myMockDB.filter(book => book.id === inputBook.id).length;
-    if (matchingBooks) {
-        res.status(500);
-        console.error(`Book with id:${inputBook.id} already exists`);
-    } else {
-        myMockDB.push(req.body);
+app.delete('/books', async (req, res, next) => {
+  const bookToDeleteId = req.body._id;
+  if (!bookToDeleteId) {
+    res.status(400).json({
+      status: 'fail',
+      message: 'Book id required!',
+    });
+    next();
+  }
+  try {
+    const bookToDelete = await Book.findById({
+      _id: bookToDeleteId,
+    });
+    if (!bookToDelete) {
+      res.status(404).json({
+        status: 'fail',
+        message: 'Book with id not found!',
+      });
+      next();
     }
-    res.json(myMockDB);
+    const deletedBook = await Book.deleteOne({
+      _id: bookToDelete._id,
+    });
+    res.status(200).json({
+      status: 'success',
+      message: 'Book deleted!',
+      data: bookToDelete,
+    });
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+  }
 });
 
-/** DELETE API: Gets ID of the book to be deleted from React and deletes the book in db. 
- * Sends 400 if there is no book with given id
- * Sends 500 if there is an error while saving data to DB
- * Sends 200 if deleted successfully
- */
+mongoose.connect(DB_URI).then((res) => {
+  console.log('Database Connected Successfully!');
+});
 
-app.listen(3001);
+app.listen(3001, () => {
+  console.log('App listening on port 3001');
+});
